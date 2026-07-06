@@ -1,0 +1,1147 @@
+diff --git a/Helpers/ExcelHelper.cs b/Helpers/ExcelHelper.cs
+index 482f9a4..0fd0e6e 100644
+--- a/Helpers/ExcelHelper.cs
++++ b/Helpers/ExcelHelper.cs
+@@ -67,32 +67,9 @@ namespace Unix_Web.Helpers
+             }
+ 
+             // 6. Auto-size columns
+-            for (int i = 0; i < dt.Columns.Count; i++)
++            if (autoSizeColumns)
+             {
+-                sheet.AutoSizeColumn(i);
+-                int currentWidth = (int)sheet.GetColumnWidth(i);
+-
+-                int maxLength = sheet.GetRow(0).GetCell(i).StringCellValue.Length;
+-
+-                foreach (DataRow row in dt.Rows)
+-                {
+-                    string cellValue = row[i] != DBNull.Value ? row[i].ToString().Trim() : "";
+-                    if (cellValue.Length > maxLength)
+-                    {
+-                        maxLength = cellValue.Length;
+-                    }
+-                }
+-
+-                int calculatedWidth = (maxLength + 3) * 350;
+-
+-                int finalWidth = Math.Max(currentWidth, calculatedWidth);
+-
+-                if (finalWidth > 15000)
+-                {
+-                    finalWidth = 15000;
+-                }
+-
+-                sheet.SetColumnWidth(i, finalWidth);
++                AutoSizeColumns(sheet, dt);
+             }
+ 
+             // 7. Freeze header row
+@@ -193,6 +170,39 @@ namespace Unix_Web.Helpers
+             }
+         }
+ 
++        /// <summary>
++        /// Tự động điều chỉnh độ rộng cột theo nội dung dài nhất (header hoặc data),
++        /// giới hạn tối đa 15000 (đơn vị 1/256 ký tự của NPOI).
++        /// Trước đây đoạn logic này được copy-paste giống hệt nhau ở 3 nơi khác nhau trong file này.
++        /// </summary>
++        private static void AutoSizeColumns(ISheet sheet, DataTable dt)
++        {
++            IRow headerRow = sheet.GetRow(0);
++
++            for (int col = 0; col < dt.Columns.Count; col++)
++            {
++                sheet.AutoSizeColumn(col);
++                int currentWidth = sheet.GetColumnWidth(col);
++
++                ICell headerCell = headerRow?.GetCell(col);
++                int maxLength = headerCell?.StringCellValue?.Length ?? 0;
++
++                foreach (DataRow row in dt.Rows)
++                {
++                    string cellValue = row[col] != DBNull.Value ? row[col].ToString().Trim() : "";
++                    if (cellValue.Length > maxLength)
++                    {
++                        maxLength = cellValue.Length;
++                    }
++                }
++
++                int calculatedWidth = (maxLength + 3) * 350;
++                int finalWidth = Math.Min(Math.Max(currentWidth, calculatedWidth), 15000);
++
++                sheet.SetColumnWidth(col, finalWidth);
++            }
++        }
++
+         /// <summary>
+         /// Download file Excel về client
+         /// </summary>
+@@ -277,33 +287,7 @@ namespace Unix_Web.Helpers
+             }
+ 
+             // Auto-size
+-            for (int i = 0; i < dt.Columns.Count; i++)
+-            {
+-                sheet.AutoSizeColumn(i);
+-                int currentWidth = (int)sheet.GetColumnWidth(i);
+-
+-                int maxLength = sheet.GetRow(0).GetCell(i).StringCellValue.Length;
+-
+-                foreach (DataRow row in dt.Rows)
+-                {
+-                    string cellValue = row[i] != DBNull.Value ? row[i].ToString().Trim() : "";
+-                    if (cellValue.Length > maxLength)
+-                    {
+-                        maxLength = cellValue.Length;
+-                    }
+-                }
+-
+-                int calculatedWidth = (maxLength + 3) * 350;
+-
+-                int finalWidth = Math.Max(currentWidth, calculatedWidth);
+-
+-                if (finalWidth > 15000)
+-                {
+-                    finalWidth = 15000;
+-                }
+-
+-                sheet.SetColumnWidth(i, finalWidth);
+-            }
++            AutoSizeColumns(sheet, dt);
+ 
+             sheet.CreateFreezePane(0, 1);
+ 
+@@ -357,27 +341,7 @@ namespace Unix_Web.Helpers
+                 }
+ 
+                 // 3. Auto-size columns (quét cả Header và Data chuẩn Unicode)
+-                for (int col = 0; col < dt.Columns.Count; col++)
+-                {
+-                    sheet.AutoSizeColumn(col);
+-                    int currentWidth = (int)sheet.GetColumnWidth(col);
+-
+-                    int maxLength = sheet.GetRow(0).GetCell(col).StringCellValue.Length;
+-                    foreach (DataRow dr in dt.Rows)
+-                    {
+-                        string cellValue = dr[col] != DBNull.Value ? dr[col].ToString().Trim() : "";
+-                        if (cellValue.Length > maxLength)
+-                        {
+-                            maxLength = cellValue.Length;
+-                        }
+-                    }
+-
+-                    int calculatedWidth = (maxLength + 3) * 350;
+-                    int finalWidth = Math.Max(currentWidth, calculatedWidth);
+-                    if (finalWidth > 15000) finalWidth = 15000;
+-
+-                    sheet.SetColumnWidth(col, finalWidth);
+-                }
++                AutoSizeColumns(sheet, dt);
+ 
+                 // 4. Freeze header
+                 sheet.CreateFreezePane(0, 1);
+diff --git a/Helpers/LoadingHelper.cs b/Helpers/LoadingHelper.cs
+index 702082e..f1f37b9 100644
+--- a/Helpers/LoadingHelper.cs
++++ b/Helpers/LoadingHelper.cs
+@@ -1,52 +1,46 @@
+-﻿using System.Web.UI;
+-
+-namespace Unix_Web.Helpers
+-{
+-    /// <summary>
+-    /// Helper hiển thị loading spinner khi xử lý
+-    /// </summary>
+-    public static class LoadingHelper
+-    {
+-        /// <summary>
+-        /// Hiển thị loading spinner với message tùy chỉnh
+-        /// </summary>
+-        /// <param name="page">Page hiện tại (this)</param>
+-        /// <param name="message">Thông báo hiển thị (mặc định: "Processing...")</param>
+-        public static void Show(Page page, string message = "Processing...")
+-        {
+-            string script = $@"
+-                if (typeof showLoading === 'function') {{
+-                    showLoading('{message}');
+-                }}
+-            ";
+-
+-            ScriptManager.RegisterStartupScript(
+-                page,
+-                page.GetType(),
+-                "ShowLoading_" + System.Guid.NewGuid().ToString(),
+-                script,
+-                true
+-            );
+-        }
+-
+-        /// <summary>
+-        /// Ẩn loading spinner
+-        /// </summary>
+-        public static void Hide(Page page)
+-        {
+-            string script = @"
+-                if (typeof hideLoading === 'function') {
+-                    hideLoading();
+-                }
+-            ";
+-
+-            ScriptManager.RegisterStartupScript(
+-                page,
+-                page.GetType(),
+-                "HideLoading_" + System.Guid.NewGuid().ToString(),
+-                script,
+-                true
+-            );
+-        }
+-    }
+-}
+\ No newline at end of file
++using System.Web.UI;
++using Newtonsoft.Json;
++
++namespace Unix_Web.Helpers
++{
++    /// <summary>
++    /// Helper hiển thị loading spinner khi xử lý
++    /// </summary>
++    public static class LoadingHelper
++    {
++        public static void Show(Page page, string message = "Processing...")
++        {
++            string safeMsg = JsonConvert.ToString(message ?? "");
++            string script = $@"
++                if (typeof showLoading === 'function') {{
++                    showLoading({safeMsg});
++                }}
++            ";
++
++            ScriptManager.RegisterStartupScript(
++                page,
++                page.GetType(),
++                "ShowLoading_" + System.Guid.NewGuid(),
++                script,
++                true
++            );
++        }
++
++        public static void Hide(Page page)
++        {
++            string script = @"
++                if (typeof hideLoading === 'function') {
++                    hideLoading();
++                }
++            ";
++
++            ScriptManager.RegisterStartupScript(
++                page,
++                page.GetType(),
++                "HideLoading_" + System.Guid.NewGuid(),
++                script,
++                true
++            );
++        }
++    }
++}
+diff --git b/Helpers/Logger.cs b/Helpers/Logger.cs
+new file mode 100644
+index 0000000..96e09a2
+--- /dev/null
++++ b/Helpers/Logger.cs
+@@ -0,0 +1,69 @@
++﻿using System;
++using System.IO;
++using System.Text;
++using System.Web;
++
++namespace Unix_Web.Helpers
++{
++    /// <summary>
++    /// Logger đơn giản, ghi lỗi ra file text theo ngày trong App_Data/Logs.
++    /// Dùng để thay thế các khối "catch (Exception ex) { return ...; }" nuốt lỗi âm thầm,
++    /// giúp còn dấu vết khi cần điều tra sự cố (đặc biệt là lỗi kết nối DB).
++    /// </summary>
++    public static class Logger
++    {
++        private static readonly object _lock = new object();
++
++        private static string LogFolder =>
++            HttpContext.Current != null
++                ? HttpContext.Current.Server.MapPath("~/App_Data/Logs")
++                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "App_Data", "Logs");
++
++        /// <summary>
++        /// Ghi log lỗi. "context" là tên hàm/nơi phát sinh lỗi, giúp dễ tìm hơn khi grep log.
++        /// </summary>
++        public static void LogError(string context, Exception ex)
++        {
++            WriteLine("ERROR", context, ex.ToString());
++        }
++
++        public static void LogWarning(string context, string message)
++        {
++            WriteLine("WARN", context, message);
++        }
++
++        public static void LogInfo(string context, string message)
++        {
++            WriteLine("INFO", context, message);
++        }
++
++        private static void WriteLine(string level, string context, string message)
++        {
++            try
++            {
++                lock (_lock)
++                {
++                    string folder = LogFolder;
++                    if (!Directory.Exists(folder))
++                        Directory.CreateDirectory(folder);
++
++                    string filePath = Path.Combine(folder, $"log-{DateTime.Now:yyyyMMdd}.txt");
++
++                    var sb = new StringBuilder();
++                    sb.Append('[').Append(DateTime.Now.ToString("HH:mm:ss.fff")).Append("] ");
++                    sb.Append('[').Append(level).Append("] ");
++                    sb.Append('[').Append(context).Append("] ");
++                    sb.Append(message);
++
++                    File.AppendAllText(filePath, sb.ToString() + Environment.NewLine, Encoding.UTF8);
++                }
++            }
++            catch
++            {
++                // Logger tự thân không được phép làm sập request đang xử lý.
++                // Nếu ghi log thất bại (vd. thiếu quyền ghi ổ đĩa), im lặng bỏ qua ở đây là chấp nhận được,
++                // vì đây là "log của log" - không còn nơi nào khác để báo lỗi này nữa.
++            }
++        }
++    }
++}
+diff --git a/Helpers/NotificationHelper.cs b/Helpers/NotificationHelper.cs
+index 6f159fb..ad6cb98 100644
+--- a/Helpers/NotificationHelper.cs
++++ b/Helpers/NotificationHelper.cs
+@@ -1,32 +1,34 @@
+-﻿using System.Web.UI;
+-
+-namespace Unix_Web.Helpers
+-{
+-    public static class NotificationHelper
+-    {
+-        public static void Show(Page page, string message, string type = "info")
+-        {
+-            if (page == null) return;
+-
+-            // Xử lý chuỗi an toàn
+-            string safeMsg = message.Replace("'", "\\'").Replace("\n", "<br>");
+-            string title = "";
+-
+-            // Tự động đặt tiêu đề
+-            switch (type)
+-            {
+-                case "success": title = "Thành công!"; break;
+-                case "error": title = "Lỗi!"; break;
+-                case "warning": title = "Cảnh báo"; break;
+-                case "question": title = "Xác nhận"; break;
+-                default: title = "Thông báo"; break;
+-            }
+-
+-            // Tạo script SweetAlert2
+-            string script = $"Swal.fire({{ title: '{title}', html: '{safeMsg}', icon: '{type}', confirmButtonText: 'OK' }});";
+-
+-            // Đăng ký script vào Page đang gọi
+-            ScriptManager.RegisterStartupScript(page, page.GetType(), "SweetAlert", script, true);
+-        }
+-    }
+-}
+\ No newline at end of file
++using System.Web.UI;
++using Newtonsoft.Json;
++
++namespace Unix_Web.Helpers
++{
++    public static class NotificationHelper
++    {
++        public static void Show(Page page, string message, string type = "info")
++        {
++            if (page == null) return;
++
++            // Dùng JsonConvert.ToString để escape chuỗi an toàn khi nhúng vào JS
++            // (tự động xử lý dấu ', ", \, xuống dòng, ... đúng chuẩn thay vì .Replace() thủ công
++            // trước đây, vốn chỉ xử lý dấu ' và \n nên vẫn có thể làm vỡ script với input khác).
++            string safeMsg = JsonConvert.ToString((message ?? "").Replace("\n", "<br>"));
++            string safeType = JsonConvert.ToString(type);
++
++            string title;
++            switch (type)
++            {
++                case "success": title = "Thành công!"; break;
++                case "error": title = "Lỗi!"; break;
++                case "warning": title = "Cảnh báo"; break;
++                case "question": title = "Xác nhận"; break;
++                default: title = "Thông báo"; break;
++            }
++            string safeTitle = JsonConvert.ToString(title);
++
++            string script = $"Swal.fire({{ title: {safeTitle}, html: {safeMsg}, icon: {safeType}, confirmButtonText: 'OK' }});";
++
++            ScriptManager.RegisterStartupScript(page, page.GetType(), "SweetAlert_" + System.Guid.NewGuid(), script, true);
++        }
++    }
++}
+diff --git a/Providers/SQLConn33.cs b/Providers/SQLConn33.cs
+index d54fab4..fa5496f 100644
+--- a/Providers/SQLConn33.cs
++++ b/Providers/SQLConn33.cs
+@@ -1,147 +1,27 @@
+-﻿using System;
+-using System.Data;
+-using System.Data.SqlClient;
+-using System.Linq;
+-
+-namespace Unix_Web.Providers
+-{
+-    public class SQLConn33
+-    {
+-        public static object ExecuteScalar(string query, object[] parameter = null)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-            object data = 0;
+-
+-            using (SqlConnection connection = new SqlConnection(ConnectionString))
+-            {
+-                connection.Open();
+-
+-                SqlCommand command = new SqlCommand(query, connection);
+-
+-                if (parameter != null)
+-                {
+-                    string[] listPara = query.Split(' ');
+-                    int i = 0;
+-                    foreach (string item in listPara)
+-                    {
+-                        if (item.Contains('?'))
+-                        {
+-                            command.Parameters.AddWithValue(item, parameter[i]);
+-                            i++;
+-                        }
+-                    }
+-                }
+-
+-                data = command.ExecuteScalar();
+-
+-                connection.Close();
+-            }
+-
+-            return data;
+-        }
+-
+-        public static DataTable ExecuteQuery(string Query, object[] parameter = null)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-
+-            using (var conn = new SqlConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-                    SqlCommand cmd = new SqlCommand(Query, conn);
+-                    if (parameter != null)
+-                    {
+-                        string[] listPara = Query.Split(' ');
+-                        int i = 0;
+-                        foreach (string item in listPara)
+-                        {
+-                            if (item.Contains('?'))
+-                            {
+-                                cmd.Parameters.AddWithValue(item, parameter[i]);
+-                                i++;
+-                            }
+-                        }
+-                    }
+-                    SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+-                    DataTable dt = new DataTable();
+-                    adapter.Fill(dt);
+-                    return dt;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return new DataTable();
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-
+-        }
+-
+-        public static bool ExecuteNonQuery(string query, object[] parameter = null)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-
+-            using (var conn = new SqlConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-
+-                    SqlCommand cmd = new SqlCommand(query, conn);
+-
+-                    if (parameter != null)
+-                    {
+-                        string[] listPara = query.Split(' ');
+-                        int i = 0;
+-                        foreach (string item in listPara)
+-                        {
+-                            if (item.Contains('?'))
+-                            {
+-                                cmd.Parameters.AddWithValue(item, parameter[i]);
+-                                i++;
+-                            }
+-                        }
+-                    }
+-                    int effectedRow = cmd.ExecuteNonQuery();
+-                    return effectedRow > 0;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return false;
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-        }
+-
+-        public static bool CheckConnectSQL(string IP)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-
+-            using (var conn = new SqlConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-                    return true;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return false;
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-        }
+-    }
+-}
+\ No newline at end of file
++using System.Data;
++
++namespace Unix_Web.Providers
++{
++    /// <summary>
++    /// Kết nối SQL Server 198.1.10.33 (ERP).
++    /// Chỉ là lớp mỏng trỏ vào SqlServerDataAccess với tên connection string tương ứng -
++    /// logic thực tế nằm ở SqlServerDataAccess (dùng chung với SQLConn34) để tránh trùng lặp code.
++    /// Giữ nguyên tên class + chữ ký hàm để các trang .aspx.cs hiện tại không cần sửa.
++    /// </summary>
++    public class SQLConn33
++    {
++        private const string ConnectionStringName = "SQLSERVER_33";
++
++        public static object ExecuteScalar(string query, object[] parameter = null)
++            => SqlServerDataAccess.ExecuteScalar(ConnectionStringName, query, parameter);
++
++        public static DataTable ExecuteQuery(string query, object[] parameter = null)
++            => SqlServerDataAccess.ExecuteQuery(ConnectionStringName, query, parameter);
++
++        public static bool ExecuteNonQuery(string query, object[] parameter = null)
++            => SqlServerDataAccess.ExecuteNonQuery(ConnectionStringName, query, parameter);
++
++        public static bool CheckConnectSQL(string ip = null)
++            => SqlServerDataAccess.CheckConnect(ConnectionStringName);
++    }
++}
+diff --git a/Providers/SQLConn34.cs b/Providers/SQLConn34.cs
+index 45f4951..c6da097 100644
+--- a/Providers/SQLConn34.cs
++++ b/Providers/SQLConn34.cs
+@@ -1,147 +1,27 @@
+-﻿using System;
+-using System.Data;
+-using System.Data.SqlClient;
+-using System.Linq;
+-
+-namespace Unix_Web.Providers
+-{
+-    public class SQLConn34
+-    {
+-        public static object ExecuteScalar(string query, object[] parameter = null)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.34;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-            object data = 0;
+-
+-            using (SqlConnection connection = new SqlConnection(ConnectionString))
+-            {
+-                connection.Open();
+-
+-                SqlCommand command = new SqlCommand(query, connection);
+-
+-                if (parameter != null)
+-                {
+-                    string[] listPara = query.Split(' ');
+-                    int i = 0;
+-                    foreach (string item in listPara)
+-                    {
+-                        if (item.Contains('?'))
+-                        {
+-                            command.Parameters.AddWithValue(item, parameter[i]);
+-                            i++;
+-                        }
+-                    }
+-                }
+-
+-                data = command.ExecuteScalar();
+-
+-                connection.Close();
+-            }
+-
+-            return data;
+-        }
+-
+-        public static DataTable ExecuteQuery(string Query, object[] parameter = null)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.34;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-            //string ConnectionString = @"Data Source = 198.1.1.95; Initial Catalog = JianDaMES; User ID = kendakv2; Password = kenda123";
+-            using (var conn = new SqlConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-                    SqlCommand cmd = new SqlCommand(Query, conn);
+-                    if (parameter != null)
+-                    {
+-                        string[] listPara = Query.Split(' ');
+-                        int i = 0;
+-                        foreach (string item in listPara)
+-                        {
+-                            if (item.Contains('?'))
+-                            {
+-                                cmd.Parameters.AddWithValue(item, parameter[i]);
+-                                i++;
+-                            }
+-                        }
+-                    }
+-                    SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+-                    DataTable dt = new DataTable();
+-                    adapter.Fill(dt);
+-                    return dt;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return new DataTable();
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-
+-        }
+-
+-        public static bool ExecuteNonQuery(string query, object[] parameter = null)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.34;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-            //string ConnectionString = @"Data Source = 198.1.1.95; Initial Catalog = JianDaMES; User ID = kendakv2; Password = kenda123";
+-            using (var conn = new SqlConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-
+-                    SqlCommand cmd = new SqlCommand(query, conn);
+-
+-                    if (parameter != null)
+-                    {
+-                        string[] listPara = query.Split(' ');
+-                        int i = 0;
+-                        foreach (string item in listPara)
+-                        {
+-                            if (item.Contains('?'))
+-                            {
+-                                cmd.Parameters.AddWithValue(item, parameter[i]);
+-                                i++;
+-                            }
+-                        }
+-                    }
+-                    int effectedRow = cmd.ExecuteNonQuery();
+-                    return effectedRow > 0;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return false;
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-        }
+-
+-        public static bool CheckConnectSQL(string IP)
+-        {
+-            string ConnectionString = "Data Source=198.1.10.34;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+-
+-            using (var conn = new SqlConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-                    return true;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return false;
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-        }
+-    }
+-}
+\ No newline at end of file
++using System.Data;
++
++namespace Unix_Web.Providers
++{
++    /// <summary>
++    /// Kết nối SQL Server 198.1.10.34 (ERP).
++    /// Chỉ là lớp mỏng trỏ vào SqlServerDataAccess với tên connection string tương ứng -
++    /// logic thực tế nằm ở SqlServerDataAccess (dùng chung với SQLConn33) để tránh trùng lặp code.
++    /// Giữ nguyên tên class + chữ ký hàm để các trang .aspx.cs hiện tại không cần sửa.
++    /// </summary>
++    public class SQLConn34
++    {
++        private const string ConnectionStringName = "SQLSERVER_34";
++
++        public static object ExecuteScalar(string query, object[] parameter = null)
++            => SqlServerDataAccess.ExecuteScalar(ConnectionStringName, query, parameter);
++
++        public static DataTable ExecuteQuery(string query, object[] parameter = null)
++            => SqlServerDataAccess.ExecuteQuery(ConnectionStringName, query, parameter);
++
++        public static bool ExecuteNonQuery(string query, object[] parameter = null)
++            => SqlServerDataAccess.ExecuteNonQuery(ConnectionStringName, query, parameter);
++
++        public static bool CheckConnectSQL(string ip = null)
++            => SqlServerDataAccess.CheckConnect(ConnectionStringName);
++    }
++}
+diff --git b/Providers/SqlServerDataAccess.cs b/Providers/SqlServerDataAccess.cs
+new file mode 100644
+index 0000000..d5f8871
+--- /dev/null
++++ b/Providers/SqlServerDataAccess.cs
+@@ -0,0 +1,146 @@
++﻿using System;
++using System.Collections.Generic;
++using System.Configuration;
++using System.Data;
++using System.Data.SqlClient;
++using System.Text.RegularExpressions;
++using Unix_Web.Helpers;
++
++namespace Unix_Web.Providers
++{
++    /// <summary>
++    /// Lớp dùng chung cho các kết nối SQL Server (được dùng bởi SQLConn33, SQLConn34, ...).
++    /// Trước đây mỗi server có 1 class riêng (SQLConn33, SQLConn34) với code giống hệt nhau,
++    /// chỉ khác connection string -> gom về đây để sửa 1 lần dùng cho tất cả.
++    ///
++    /// Connection string được đọc từ Web.config (connectionStrings) thay vì hardcode trong code,
++    /// để đổi IP/user/pass không cần build lại project, và tách được config theo môi trường
++    /// (Web.Debug.config / Web.Release.config).
++    /// </summary>
++    internal static class SqlServerDataAccess
++    {
++        // Khớp các tham số dạng @paramName trong câu SQL (đúng chuẩn SqlClient).
++        // Trước đây code cũ tìm ký tự '?' bằng query.Split(' '), vốn không phải cú pháp
++        // tham số hợp lệ của SqlCommand nên không thực sự hoạt động.
++        private static readonly Regex ParamTokenRegex = new Regex(@"@\w+", RegexOptions.Compiled);
++
++        private static string GetConnectionString(string connectionStringName)
++        {
++            var setting = ConfigurationManager.ConnectionStrings[connectionStringName];
++            if (setting == null)
++            {
++                throw new ConfigurationErrorsException(
++                    $"Không tìm thấy connection string '{connectionStringName}' trong Web.config.");
++            }
++            return setting.ConnectionString;
++        }
++
++        /// <summary>
++        /// Gán tham số vào SqlCommand theo đúng thứ tự token @param xuất hiện trong câu query.
++        /// Nếu query không chứa token @param nào (đa số trường hợp hiện tại trong project, do
++        /// các trang tự nối chuỗi sẵn), thì bỏ qua - giữ hành vi tương thích ngược.
++        /// </summary>
++        private static void BindParameters(SqlCommand cmd, string query, object[] parameters)
++        {
++            if (parameters == null || parameters.Length == 0) return;
++
++            var tokens = new List<string>();
++            foreach (Match m in ParamTokenRegex.Matches(query))
++            {
++                if (!tokens.Contains(m.Value))
++                    tokens.Add(m.Value);
++            }
++
++            if (tokens.Count == 0) return;
++
++            int count = Math.Min(tokens.Count, parameters.Length);
++            for (int i = 0; i < count; i++)
++            {
++                cmd.Parameters.AddWithValue(tokens[i], parameters[i] ?? DBNull.Value);
++            }
++        }
++
++        public static object ExecuteScalar(string connectionStringName, string query, object[] parameters = null)
++        {
++            string connectionString = GetConnectionString(connectionStringName);
++            using (var conn = new SqlConnection(connectionString))
++            using (var cmd = new SqlCommand(query, conn))
++            {
++                try
++                {
++                    BindParameters(cmd, query, parameters);
++                    conn.Open();
++                    return cmd.ExecuteScalar();
++                }
++                catch (Exception ex)
++                {
++                    Logger.LogError($"{connectionStringName}.ExecuteScalar", ex);
++                    return null;
++                }
++            }
++        }
++
++        public static DataTable ExecuteQuery(string connectionStringName, string query, object[] parameters = null)
++        {
++            string connectionString = GetConnectionString(connectionStringName);
++            using (var conn = new SqlConnection(connectionString))
++            using (var cmd = new SqlCommand(query, conn))
++            {
++                try
++                {
++                    BindParameters(cmd, query, parameters);
++                    var dt = new DataTable();
++                    using (var adapter = new SqlDataAdapter(cmd))
++                    {
++                        adapter.Fill(dt);
++                    }
++                    return dt;
++                }
++                catch (Exception ex)
++                {
++                    Logger.LogError($"{connectionStringName}.ExecuteQuery", ex);
++                    return new DataTable();
++                }
++            }
++        }
++
++        public static bool ExecuteNonQuery(string connectionStringName, string query, object[] parameters = null)
++        {
++            string connectionString = GetConnectionString(connectionStringName);
++            using (var conn = new SqlConnection(connectionString))
++            using (var cmd = new SqlCommand(query, conn))
++            {
++                try
++                {
++                    BindParameters(cmd, query, parameters);
++                    conn.Open();
++                    int affectedRows = cmd.ExecuteNonQuery();
++                    return affectedRows > 0;
++                }
++                catch (Exception ex)
++                {
++                    Logger.LogError($"{connectionStringName}.ExecuteNonQuery", ex);
++                    return false;
++                }
++            }
++        }
++
++        public static bool CheckConnect(string connectionStringName)
++        {
++            string connectionString = GetConnectionString(connectionStringName);
++            using (var conn = new SqlConnection(connectionString))
++            {
++                try
++                {
++                    conn.Open();
++                    return true;
++                }
++                catch (Exception ex)
++                {
++                    Logger.LogError($"{connectionStringName}.CheckConnect", ex);
++                    return false;
++                }
++            }
++        }
++    }
++}
+diff --git a/Providers/UnixConn.cs b/Providers/UnixConn.cs
+index 64a0ce4..b129e32 100644
+--- a/Providers/UnixConn.cs
++++ b/Providers/UnixConn.cs
+@@ -1,98 +1,98 @@
+-﻿using System;
+-using System.Data;
+-using System.Data.Odbc;
+-using System.Linq;
+-
+-namespace Unix_Web.Providers
+-{
+-    public class UnixConn
+-    {
+-        static string ConnectionString = @"Driver={IBM INFORMIX 3.82 32 BIT}; Host=192.1.1.1; Server=ids12; Service=3002; " +
+-                                        "Protocol=onsoctcp; Database=erp; Uid=kendaweb; Pwd=kenda; NEWLOCALE=zh_cn,zh_tw; " +
+-                                        "NEWCODESET=big5,57352,utf8; DB_LOCALE=zh_tw.57352; CLIENT_LOCALE=zh_tw.big5";
+-
+-        //static string ConnectionString = @"Driver={IBM INFORMIX ODBC DRIVER}; Host=192.1.1.1; Server=ids12; Service=on7tcp; " +
+-        //                                 "Protocol=onsoctcp; Database=erp; Uid=kendaweb; Pwd=kenda; " +
+-        //                                 "NEWLOCALE=zh_cn,zh_tw; NEWCODESET=big5,57352,utf8; " +
+-        //                                 "DB_LOCALE=zh_tw.57352; CLIENT_LOCALE=zh_tw.big5";
+-
+-        public static DataTable ExecuteQuery(
+-            string Query,
+-            object[] parameter = null)
+-        {
+-            using (var conn = new OdbcConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-                    OdbcCommand cmd = new OdbcCommand(Query, conn);
+-                    if (parameter != null)
+-                    {
+-                        string[] listPara = Query.Split(' ');
+-                        int i = 0;
+-                        foreach (string item in listPara)
+-                        {
+-                            if (item.Contains('?'))
+-                            {
+-                                cmd.Parameters.AddWithValue(item, parameter[i]);
+-                                i++;
+-                            }
+-                        }
+-                    }
+-                    OdbcDataAdapter adapter = new OdbcDataAdapter(cmd);
+-                    DataTable dt = new DataTable();
+-                    adapter.Fill(dt);
+-                    return dt;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return new DataTable();
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-        }
+-
+-        public static bool ExecuteNonQuery(string query,
+-           object[] parameter = null)
+-        {
+-            using (var conn = new OdbcConnection(ConnectionString))
+-            {
+-                try
+-                {
+-                    conn.Open();
+-
+-                    OdbcCommand cmd = new OdbcCommand(query, conn);
+-
+-                    if (parameter != null)
+-                    {
+-                        string[] listPara = query.Split(' ');
+-                        int i = 0;
+-                        foreach (string item in listPara)
+-                        {
+-                            if (item.Contains('?'))
+-                            {
+-                                cmd.Parameters.AddWithValue(item, parameter[i]);
+-                                i++;
+-                            }
+-                        }
+-                    }
+-                    int effectedRow = cmd.ExecuteNonQuery();
+-                    return effectedRow > 0;
+-                }
+-                catch (Exception ex)
+-                {
+-                    return false;
+-                }
+-                finally
+-                {
+-                    if (conn.State != ConnectionState.Closed)
+-                        conn.Close();
+-                }
+-            }
+-        }
+-    }
+-}
+\ No newline at end of file
++using System;
++using System.Collections.Generic;
++using System.Configuration;
++using System.Data;
++using System.Data.Odbc;
++using System.Text.RegularExpressions;
++using Unix_Web.Helpers;
++
++namespace Unix_Web.Providers
++{
++    /// <summary>
++    /// Kết nối Informix (Unix ERP) qua ODBC.
++    /// Connection string được đọc từ Web.config (appSettings["UnixConn.ConnectionString"])
++    /// thay vì hardcode trong code.
++    /// </summary>
++    public class UnixConn
++    {
++        private static readonly Regex ParamTokenRegex = new Regex(@"@\w+", RegexOptions.Compiled);
++
++        private static string ConnectionString
++        {
++            get
++            {
++                string cs = ConfigurationManager.AppSettings["UnixConn.ConnectionString"];
++                if (string.IsNullOrEmpty(cs))
++                {
++                    throw new ConfigurationErrorsException(
++                        "Không tìm thấy 'UnixConn.ConnectionString' trong Web.config (appSettings).");
++                }
++                return cs;
++            }
++        }
++
++        private static void BindParameters(OdbcCommand cmd, string query, object[] parameters)
++        {
++            if (parameters == null || parameters.Length == 0) return;
++
++            var tokens = new List<string>();
++            foreach (Match m in ParamTokenRegex.Matches(query))
++            {
++                if (!tokens.Contains(m.Value))
++                    tokens.Add(m.Value);
++            }
++
++            if (tokens.Count == 0) return;
++
++            int count = Math.Min(tokens.Count, parameters.Length);
++            for (int i = 0; i < count; i++)
++            {
++                cmd.Parameters.AddWithValue(tokens[i], parameters[i] ?? DBNull.Value);
++            }
++        }
++
++        public static DataTable ExecuteQuery(string query, object[] parameter = null)
++        {
++            using (var conn = new OdbcConnection(ConnectionString))
++            using (var cmd = new OdbcCommand(query, conn))
++            {
++                try
++                {
++                    BindParameters(cmd, query, parameter);
++                    conn.Open();
++                    var dt = new DataTable();
++                    using (var adapter = new OdbcDataAdapter(cmd))
++                    {
++                        adapter.Fill(dt);
++                    }
++                    return dt;
++                }
++                catch (Exception ex)
++                {
++                    Logger.LogError("UnixConn.ExecuteQuery", ex);
++                    return new DataTable();
++                }
++            }
++        }
++
++        public static bool ExecuteNonQuery(string query, object[] parameter = null)
++        {
++            using (var conn = new OdbcConnection(ConnectionString))
++            using (var cmd = new OdbcCommand(query, conn))
++            {
++                try
++                {
++                    BindParameters(cmd, query, parameter);
++                    conn.Open();
++                    int affectedRows = cmd.ExecuteNonQuery();
++                    return affectedRows > 0;
++                }
++                catch (Exception ex)
++                {
++                    Logger.LogError("UnixConn.ExecuteNonQuery", ex);
++                    return false;
++                }
++            }
++        }
++    }
++}
+diff --git a/Unix_Web.csproj b/Unix_Web.csproj
+index 8cfabbf..e4fd47d 100644
+--- a/Unix_Web.csproj
++++ b/Unix_Web.csproj
+@@ -300,11 +300,13 @@
+     </Compile>
+     <Compile Include="Helpers\ExcelHelper.cs" />
+     <Compile Include="Helpers\LoadingHelper.cs" />
++    <Compile Include="Helpers\Logger.cs" />
+     <Compile Include="Helpers\NotificationHelper.cs" />
+     <Compile Include="Helpers\Variable.cs" />
+     <Compile Include="Properties\AssemblyInfo.cs" />
+     <Compile Include="Providers\SQLConn33.cs" />
+     <Compile Include="Providers\SQLConn34.cs" />
++    <Compile Include="Providers\SqlServerDataAccess.cs" />
+     <Compile Include="Providers\UnixConn.cs" />
+     <Compile Include="Shared\Main.aspx.cs">
+       <DependentUpon>Main.aspx</DependentUpon>
+diff --git a/Web.config b/Web.config
+index a998b03..7d58c59 100644
+--- a/Web.config
++++ b/Web.config
+@@ -4,6 +4,16 @@
+   https://go.microsoft.com/fwlink/?LinkId=169433
+   -->
+ <configuration>
++  <connectionStrings>
++    <!-- SQL Server 198.1.10.33 (ERP) -->
++    <add name="SQLSERVER_33" connectionString="Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123" providerName="System.Data.SqlClient"/>
++    <!-- SQL Server 198.1.10.34 (ERP) -->
++    <add name="SQLSERVER_34" connectionString="Data Source=198.1.10.34;Initial Catalog=erp;User ID=kendakv2;Password=kenda123" providerName="System.Data.SqlClient"/>
++  </connectionStrings>
++  <appSettings>
++    <!-- Informix ODBC (Unix ERP) -->
++    <add key="UnixConn.ConnectionString" value="Driver={IBM INFORMIX 3.82 32 BIT}; Host=192.1.1.1; Server=ids12; Service=3002; Protocol=onsoctcp; Database=erp; Uid=kendaweb; Pwd=kenda; NEWLOCALE=zh_cn,zh_tw; NEWCODESET=big5,57352,utf8; DB_LOCALE=zh_tw.57352; CLIENT_LOCALE=zh_tw.big5"/>
++  </appSettings>
+   <system.web>
+     <globalization requestEncoding="utf-8" responseEncoding="utf-8" fileEncoding="utf-8" culture="vi-VN" uiCulture="vi-VN"/>
+     <compilation debug="true" targetFramework="4.7.2"/>

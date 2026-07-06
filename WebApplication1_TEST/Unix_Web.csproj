@@ -299,12 +299,13 @@
       <DependentUpon>Login.aspx</DependentUpon>
     </Compile>
     <Compile Include="Helpers\ExcelHelper.cs" />
-    <Compile Include="Helpers\LoadingHelper.cs" />
+    <Compile Include="Helpers\Logger.cs" />
     <Compile Include="Helpers\NotificationHelper.cs" />
     <Compile Include="Helpers\Variable.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Providers\SQLConn33.cs" />
     <Compile Include="Providers\SQLConn34.cs" />
+    <Compile Include="Providers\SqlServerDataAccess.cs" />
     <Compile Include="Providers\UnixConn.cs" />
     <Compile Include="Shared\Main.aspx.cs">
       <DependentUpon>Main.aspx</DependentUpon>

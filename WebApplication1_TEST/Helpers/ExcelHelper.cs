@@ -67,32 +67,9 @@ namespace Unix_Web.Helpers
             }
 
             // 6. Auto-size columns
-            for (int i = 0; i < dt.Columns.Count; i++)
+            if (autoSizeColumns)
             {
-                sheet.AutoSizeColumn(i);
-                int currentWidth = (int)sheet.GetColumnWidth(i);
-
-                int maxLength = sheet.GetRow(0).GetCell(i).StringCellValue.Length;
-
-                foreach (DataRow row in dt.Rows)
-                {
-                    string cellValue = row[i] != DBNull.Value ? row[i].ToString().Trim() : "";
-                    if (cellValue.Length > maxLength)
-                    {
-                        maxLength = cellValue.Length;
-                    }
-                }
-
-                int calculatedWidth = (maxLength + 3) * 350;
-
-                int finalWidth = Math.Max(currentWidth, calculatedWidth);
-
-                if (finalWidth > 15000)
-                {
-                    finalWidth = 15000;
-                }
-
-                sheet.SetColumnWidth(i, finalWidth);
+                AutoSizeColumns(sheet, dt);
             }
 
             // 7. Freeze header row
@@ -194,6 +171,39 @@ namespace Unix_Web.Helpers
         }
 
         /// <summary>
+        /// Tự động điều chỉnh độ rộng cột theo nội dung dài nhất (header hoặc data),
+        /// giới hạn tối đa 15000 (đơn vị 1/256 ký tự của NPOI).
+        /// Trước đây đoạn logic này được copy-paste giống hệt nhau ở 3 nơi khác nhau trong file này.
+        /// </summary>
+        private static void AutoSizeColumns(ISheet sheet, DataTable dt)
+        {
+            IRow headerRow = sheet.GetRow(0);
+
+            for (int col = 0; col < dt.Columns.Count; col++)
+            {
+                sheet.AutoSizeColumn(col);
+                int currentWidth = (int)sheet.GetColumnWidth(col);
+
+                ICell headerCell = headerRow?.GetCell(col);
+                int maxLength = headerCell?.StringCellValue?.Length ?? 0;
+
+                foreach (DataRow row in dt.Rows)
+                {
+                    string cellValue = row[col] != DBNull.Value ? row[col].ToString().Trim() : "";
+                    if (cellValue.Length > maxLength)
+                    {
+                        maxLength = cellValue.Length;
+                    }
+                }
+
+                int calculatedWidth = (maxLength + 3) * 350;
+                int finalWidth = Math.Min(Math.Max(currentWidth, calculatedWidth), 15000);
+
+                sheet.SetColumnWidth(col, finalWidth);
+            }
+        }
+
+        /// <summary>
         /// Download file Excel về client
         /// </summary>
         private static void DownloadExcel(IWorkbook workbook, string fileName)
@@ -277,33 +287,7 @@ namespace Unix_Web.Helpers
             }
 
             // Auto-size
-            for (int i = 0; i < dt.Columns.Count; i++)
-            {
-                sheet.AutoSizeColumn(i);
-                int currentWidth = (int)sheet.GetColumnWidth(i);
-
-                int maxLength = sheet.GetRow(0).GetCell(i).StringCellValue.Length;
-
-                foreach (DataRow row in dt.Rows)
-                {
-                    string cellValue = row[i] != DBNull.Value ? row[i].ToString().Trim() : "";
-                    if (cellValue.Length > maxLength)
-                    {
-                        maxLength = cellValue.Length;
-                    }
-                }
-
-                int calculatedWidth = (maxLength + 3) * 350;
-
-                int finalWidth = Math.Max(currentWidth, calculatedWidth);
-
-                if (finalWidth > 15000)
-                {
-                    finalWidth = 15000;
-                }
-
-                sheet.SetColumnWidth(i, finalWidth);
-            }
+            AutoSizeColumns(sheet, dt);
 
             sheet.CreateFreezePane(0, 1);
 
@@ -357,27 +341,7 @@ namespace Unix_Web.Helpers
                 }
 
                 // 3. Auto-size columns (quét cả Header và Data chuẩn Unicode)
-                for (int col = 0; col < dt.Columns.Count; col++)
-                {
-                    sheet.AutoSizeColumn(col);
-                    int currentWidth = (int)sheet.GetColumnWidth(col);
-
-                    int maxLength = sheet.GetRow(0).GetCell(col).StringCellValue.Length;
-                    foreach (DataRow dr in dt.Rows)
-                    {
-                        string cellValue = dr[col] != DBNull.Value ? dr[col].ToString().Trim() : "";
-                        if (cellValue.Length > maxLength)
-                        {
-                            maxLength = cellValue.Length;
-                        }
-                    }
-
-                    int calculatedWidth = (maxLength + 3) * 350;
-                    int finalWidth = Math.Max(currentWidth, calculatedWidth);
-                    if (finalWidth > 15000) finalWidth = 15000;
-
-                    sheet.SetColumnWidth(col, finalWidth);
-                }
+                AutoSizeColumns(sheet, dt);
 
                 // 4. Freeze header
                 sheet.CreateFreezePane(0, 1);

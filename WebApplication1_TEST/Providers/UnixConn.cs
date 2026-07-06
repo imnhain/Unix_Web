@@ -1,96 +1,96 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
 using System.Data.Odbc;
-using System.Linq;
+using System.Text.RegularExpressions;
+using Unix_Web.Helpers;
 
 namespace Unix_Web.Providers
 {
+    /// <summary>
+    /// Kết nối Informix (Unix ERP) qua ODBC.
+    /// Connection string được đọc từ Web.config (appSettings["UnixConn.ConnectionString"])
+    /// thay vì hardcode trong code.
+    /// </summary>
     public class UnixConn
     {
-        static string ConnectionString = @"Driver={IBM INFORMIX 3.82 32 BIT}; Host=192.1.1.1; Server=ids12; Service=3002; " +
-                                        "Protocol=onsoctcp; Database=erp; Uid=kendaweb; Pwd=kenda; NEWLOCALE=zh_cn,zh_tw; " +
-                                        "NEWCODESET=big5,57352,utf8; DB_LOCALE=zh_tw.57352; CLIENT_LOCALE=zh_tw.big5";
+        private static readonly Regex ParamTokenRegex = new Regex(@"@\w+", RegexOptions.Compiled);
 
-        //static string ConnectionString = @"Driver={IBM INFORMIX ODBC DRIVER}; Host=192.1.1.1; Server=ids12; Service=on7tcp; " +
-        //                                 "Protocol=onsoctcp; Database=erp; Uid=kendaweb; Pwd=kenda; " +
-        //                                 "NEWLOCALE=zh_cn,zh_tw; NEWCODESET=big5,57352,utf8; " +
-        //                                 "DB_LOCALE=zh_tw.57352; CLIENT_LOCALE=zh_tw.big5";
+        private static string ConnectionString
+        {
+            get
+            {
+                string cs = ConfigurationManager.AppSettings["UnixConn.ConnectionString"];
+                if (string.IsNullOrEmpty(cs))
+                {
+                    throw new ConfigurationErrorsException(
+                        "Không tìm thấy 'UnixConn.ConnectionString' trong Web.config (appSettings).");
+                }
+                return cs;
+            }
+        }
 
-        public static DataTable ExecuteQuery(
-            string Query,
-            object[] parameter = null)
+        private static void BindParameters(OdbcCommand cmd, string query, object[] parameters)
+        {
+            if (parameters == null || parameters.Length == 0) return;
+
+            var tokens = new List<string>();
+            foreach (Match m in ParamTokenRegex.Matches(query))
+            {
+                if (!tokens.Contains(m.Value))
+                    tokens.Add(m.Value);
+            }
+
+            if (tokens.Count == 0) return;
+
+            int count = Math.Min(tokens.Count, parameters.Length);
+            for (int i = 0; i < count; i++)
+            {
+                cmd.Parameters.AddWithValue(tokens[i], parameters[i] ?? DBNull.Value);
+            }
+        }
+
+        public static DataTable ExecuteQuery(string query, object[] parameter = null)
         {
             using (var conn = new OdbcConnection(ConnectionString))
+            using (var cmd = new OdbcCommand(query, conn))
             {
                 try
                 {
+                    BindParameters(cmd, query, parameter);
                     conn.Open();
-                    OdbcCommand cmd = new OdbcCommand(Query, conn);
-                    if (parameter != null)
+                    var dt = new DataTable();
+                    using (var adapter = new OdbcDataAdapter(cmd))
                     {
-                        string[] listPara = Query.Split(' ');
-                        int i = 0;
-                        foreach (string item in listPara)
-                        {
-                            if (item.Contains('?'))
-                            {
-                                cmd.Parameters.AddWithValue(item, parameter[i]);
-                                i++;
-                            }
-                        }
+                        adapter.Fill(dt);
                     }
-                    OdbcDataAdapter adapter = new OdbcDataAdapter(cmd);
-                    DataTable dt = new DataTable();
-                    adapter.Fill(dt);
                     return dt;
                 }
                 catch (Exception ex)
                 {
+                    Logger.LogError("UnixConn.ExecuteQuery", ex);
                     return new DataTable();
-                }
-                finally
-                {
-                    if (conn.State != ConnectionState.Closed)
-                        conn.Close();
                 }
             }
         }
 
-        public static bool ExecuteNonQuery(string query,
-           object[] parameter = null)
+        public static bool ExecuteNonQuery(string query, object[] parameter = null)
         {
             using (var conn = new OdbcConnection(ConnectionString))
+            using (var cmd = new OdbcCommand(query, conn))
             {
                 try
                 {
+                    BindParameters(cmd, query, parameter);
                     conn.Open();
-
-                    OdbcCommand cmd = new OdbcCommand(query, conn);
-
-                    if (parameter != null)
-                    {
-                        string[] listPara = query.Split(' ');
-                        int i = 0;
-                        foreach (string item in listPara)
-                        {
-                            if (item.Contains('?'))
-                            {
-                                cmd.Parameters.AddWithValue(item, parameter[i]);
-                                i++;
-                            }
-                        }
-                    }
-                    int effectedRow = cmd.ExecuteNonQuery();
-                    return effectedRow > 0;
+                    int affectedRows = cmd.ExecuteNonQuery();
+                    return affectedRows > 0;
                 }
                 catch (Exception ex)
                 {
+                    Logger.LogError("UnixConn.ExecuteNonQuery", ex);
                     return false;
-                }
-                finally
-                {
-                    if (conn.State != ConnectionState.Closed)
-                        conn.Close();
                 }
             }
         }

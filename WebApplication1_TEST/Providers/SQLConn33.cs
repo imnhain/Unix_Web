@@ -1,147 +1,27 @@
-﻿using System;
 using System.Data;
-using System.Data.SqlClient;
-using System.Linq;
 
 namespace Unix_Web.Providers
 {
+    /// <summary>
+    /// Kết nối SQL Server 198.1.10.33 (ERP).
+    /// Chỉ là lớp mỏng trỏ vào SqlServerDataAccess với tên connection string tương ứng -
+    /// logic thực tế nằm ở SqlServerDataAccess (dùng chung với SQLConn34) để tránh trùng lặp code.
+    /// Giữ nguyên tên class + chữ ký hàm để các trang .aspx.cs hiện tại không cần sửa.
+    /// </summary>
     public class SQLConn33
     {
+        private const string ConnectionStringName = "SQLSERVER_33";
+
         public static object ExecuteScalar(string query, object[] parameter = null)
-        {
-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
-            object data = 0;
+            => SqlServerDataAccess.ExecuteScalar(ConnectionStringName, query, parameter);
 
-            using (SqlConnection connection = new SqlConnection(ConnectionString))
-            {
-                connection.Open();
-
-                SqlCommand command = new SqlCommand(query, connection);
-
-                if (parameter != null)
-                {
-                    string[] listPara = query.Split(' ');
-                    int i = 0;
-                    foreach (string item in listPara)
-                    {
-                        if (item.Contains('?'))
-                        {
-                            command.Parameters.AddWithValue(item, parameter[i]);
-                            i++;
-                        }
-                    }
-                }
-
-                data = command.ExecuteScalar();
-
-                connection.Close();
-            }
-
-            return data;
-        }
-
-        public static DataTable ExecuteQuery(string Query, object[] parameter = null)
-        {
-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
-
-            using (var conn = new SqlConnection(ConnectionString))
-            {
-                try
-                {
-                    conn.Open();
-                    SqlCommand cmd = new SqlCommand(Query, conn);
-                    if (parameter != null)
-                    {
-                        string[] listPara = Query.Split(' ');
-                        int i = 0;
-                        foreach (string item in listPara)
-                        {
-                            if (item.Contains('?'))
-                            {
-                                cmd.Parameters.AddWithValue(item, parameter[i]);
-                                i++;
-                            }
-                        }
-                    }
-                    SqlDataAdapter adapter = new SqlDataAdapter(cmd);
-                    DataTable dt = new DataTable();
-                    adapter.Fill(dt);
-                    return dt;
-                }
-                catch (Exception ex)
-                {
-                    return new DataTable();
-                }
-                finally
-                {
-                    if (conn.State != ConnectionState.Closed)
-                        conn.Close();
-                }
-            }
-
-        }
+        public static DataTable ExecuteQuery(string query, object[] parameter = null)
+            => SqlServerDataAccess.ExecuteQuery(ConnectionStringName, query, parameter);
 
         public static bool ExecuteNonQuery(string query, object[] parameter = null)
-        {
-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
+            => SqlServerDataAccess.ExecuteNonQuery(ConnectionStringName, query, parameter);
 
-            using (var conn = new SqlConnection(ConnectionString))
-            {
-                try
-                {
-                    conn.Open();
-
-                    SqlCommand cmd = new SqlCommand(query, conn);
-
-                    if (parameter != null)
-                    {
-                        string[] listPara = query.Split(' ');
-                        int i = 0;
-                        foreach (string item in listPara)
-                        {
-                            if (item.Contains('?'))
-                            {
-                                cmd.Parameters.AddWithValue(item, parameter[i]);
-                                i++;
-                            }
-                        }
-                    }
-                    int effectedRow = cmd.ExecuteNonQuery();
-                    return effectedRow > 0;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-                finally
-                {
-                    if (conn.State != ConnectionState.Closed)
-                        conn.Close();
-                }
-            }
-        }
-
-        public static bool CheckConnectSQL(string IP)
-        {
-            string ConnectionString = "Data Source=198.1.10.33;Initial Catalog=erp;User ID=kendakv2;Password=kenda123";
-
-            using (var conn = new SqlConnection(ConnectionString))
-            {
-                try
-                {
-                    conn.Open();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-                finally
-                {
-                    if (conn.State != ConnectionState.Closed)
-                        conn.Close();
-                }
-            }
-        }
+        public static bool CheckConnectSQL(string ip = null)
+            => SqlServerDataAccess.CheckConnect(ConnectionStringName);
     }
 }
