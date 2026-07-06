@@ -11,6 +11,7 @@ namespace Unix_Web.Source
         protected void Page_Load(object sender, EventArgs e)
         {
             // Kiểm tra quyền truy cập nếu cần
+            //test chức năng restore 1
             if (Session["username"] == null)
             {
                 Response.Redirect("~/Auth/Login.aspx");

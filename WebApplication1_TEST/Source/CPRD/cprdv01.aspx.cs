@@ -12,6 +12,7 @@ namespace Unix_Web.Source.CPRD
 {
     public partial class cprdv01 : System.Web.UI.Page
     {
+        //test chức năng restore 1 2
         // --- CẤU HÌNH PHÂN TRANG ---
         private const int BATCH_SIZE = 20;
 
